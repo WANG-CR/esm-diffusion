@@ -19,6 +19,7 @@ class ESM2(nn.Module):
         attention_heads: int = 20,
         alphabet: Union[esm.data.Alphabet, str] = "ESM-1b",
         token_dropout: bool = True,
+        max_time_steps = 1000,
     ):
         super().__init__()
         self.num_layers = num_layers
@@ -35,7 +36,7 @@ class ESM2(nn.Module):
         self.prepend_bos = alphabet.prepend_bos
         self.append_eos = alphabet.append_eos
         self.token_dropout = token_dropout
-
+        self.max_time_steps = max_time_steps
         self._init_submodules()
 
     def _init_submodules(self):
@@ -74,7 +75,14 @@ class ESM2(nn.Module):
             weight=self.embed_tokens.weight,
         )
 
-    def forward(self, tokens, repr_layers=[], need_head_weights=False, return_contacts=False):
+        # add positional embeddings for timestep
+        if self.max_time_steps is not None:
+            self.postional_embedding = nn.Embedding(
+                self.max_time_steps,
+                self.embed_dim,
+            )
+
+    def forward(self, tokens, repr_layers=[], t=None, need_head_weights=False, return_contacts=False):
         if return_contacts:
             need_head_weights = True
 
@@ -83,13 +91,18 @@ class ESM2(nn.Module):
 
         x = self.embed_scale * self.embed_tokens(tokens)
 
-        if self.token_dropout:
-            x.masked_fill_((tokens == self.mask_idx).unsqueeze(-1), 0.0)
-            # x: B x T x C
-            mask_ratio_train = 0.15 * 0.8
-            src_lengths = (~padding_mask).sum(-1)
-            mask_ratio_observed = (tokens == self.mask_idx).sum(-1).to(x.dtype) / src_lengths
-            x = x * (1 - mask_ratio_train) / (1 - mask_ratio_observed)[:, None, None]
+        if self.max_time_steps is not None and t is not None:
+            # t of shape [B]
+            # print(f"t: {t.shape}")
+            x = x + self.postional_embedding(t)
+
+        # if self.token_dropout:
+        #     x.masked_fill_((tokens == self.mask_idx).unsqueeze(-1), 0.0)
+        #     # x: B x T x C
+        #     mask_ratio_train = 0.15 * 0.8
+        #     src_lengths = (~padding_mask).sum(-1)
+        #     mask_ratio_observed = (tokens == self.mask_idx).sum(-1).to(x.dtype) / src_lengths
+        #     x = x * (1 - mask_ratio_train) / (1 - mask_ratio_observed)[:, None, None]
 
         if padding_mask is not None:
             x = x * (1 - padding_mask.unsqueeze(-1).type_as(x))
