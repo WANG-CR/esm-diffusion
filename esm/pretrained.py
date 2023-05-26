@@ -59,9 +59,9 @@ def _download_model_and_regression_data(model_name):
     return model_data, regression_data
 
 
-def load_model_and_alphabet_hub(model_name):
+def load_model_and_alphabet_hub(model_name, **kwargs):
     model_data, regression_data = _download_model_and_regression_data(model_name)
-    return load_model_and_alphabet_core(model_name, model_data, regression_data)
+    return load_model_and_alphabet_core(model_name, model_data, regression_data, **kwargs)
 
 
 def load_model_and_alphabet_local(model_location):
@@ -161,7 +161,7 @@ def _load_model_and_alphabet_core_v1(model_data):
     return model, alphabet, model_state
 
 
-def _load_model_and_alphabet_core_v2(model_data):
+def _load_model_and_alphabet_core_v2(model_data, **kwargs):
     def upgrade_state_dict(state_dict):
         """Removes prefixes 'model.encoder.sentence_encoder.' and 'model.encoder.'."""
         prefixes = ["encoder.sentence_encoder.", "encoder."]
@@ -179,22 +179,24 @@ def _load_model_and_alphabet_core_v2(model_data):
         attention_heads=cfg.encoder_attention_heads,
         alphabet=alphabet,
         token_dropout=cfg.token_dropout,
+        denoise = kwargs.get('denoise', False), 
+        max_time_steps = kwargs.get("max_time_steps") or None,
     )
     return model, alphabet, state_dict
 
 
-def load_model_and_alphabet_core(model_name, model_data, regression_data=None):
+def load_model_and_alphabet_core(model_name, model_data, regression_data=None, **kwargs):
     if regression_data is not None:
         model_data["model"].update(regression_data["model"])
 
     if model_name.startswith("esm2"):
-        model, alphabet, model_state = _load_model_and_alphabet_core_v2(model_data)
+        model, alphabet, model_state = _load_model_and_alphabet_core_v2(model_data, **kwargs)
     else:
         model, alphabet, model_state = _load_model_and_alphabet_core_v1(model_data)
 
     expected_keys = set(model.state_dict().keys())
     found_keys = set(model_state.keys())
-
+    print(f"kwargs: {kwargs.get('denoise', False)}")
     if regression_data is None:
         expected_missing = {"contact_head.regression.weight", "contact_head.regression.bias"}
         error_msgs = []
@@ -216,7 +218,10 @@ def load_model_and_alphabet_core(model_name, model_data, regression_data=None):
                 "Regression weights not found, predicting contacts will not produce correct results."
             )
 
-    model.load_state_dict(model_state, strict=regression_data is not None)
+    if kwargs.get('denoise', False):
+        model.load_state_dict(model_state, strict=False)
+    else:
+        model.load_state_dict(model_state, strict=regression_data is not None)
 
     return model, alphabet
 
@@ -347,54 +352,54 @@ def esm_if1_gvp4_t16_142M_UR50():
     return load_model_and_alphabet_hub("esm_if1_gvp4_t16_142M_UR50")
 
 
-def esm2_t6_8M_UR50D():
+def esm2_t6_8M_UR50D(**kwargs):
     """6 layer ESM-2 model with 8M params, trained on UniRef50.
 
     Returns a tuple of (Model, Alphabet).
     """
-    return load_model_and_alphabet_hub("esm2_t6_8M_UR50D")
+    return load_model_and_alphabet_hub("esm2_t6_8M_UR50D", **kwargs)
 
 
-def esm2_t12_35M_UR50D():
+def esm2_t12_35M_UR50D(**kwargs):
     """12 layer ESM-2 model with 35M params, trained on UniRef50.
 
     Returns a tuple of (Model, Alphabet).
     """
-    return load_model_and_alphabet_hub("esm2_t12_35M_UR50D")
+    return load_model_and_alphabet_hub("esm2_t12_35M_UR50D",**kwargs)
 
 
-def esm2_t30_150M_UR50D():
+def esm2_t30_150M_UR50D(**kwargs):
     """30 layer ESM-2 model with 150M params, trained on UniRef50.
 
     Returns a tuple of (Model, Alphabet).
     """
-    return load_model_and_alphabet_hub("esm2_t30_150M_UR50D")
+    return load_model_and_alphabet_hub("esm2_t30_150M_UR50D",**kwargs)
 
 
-def esm2_t33_650M_UR50D():
+def esm2_t33_650M_UR50D(**kwargs):
     """33 layer ESM-2 model with 650M params, trained on UniRef50.
 
     Returns a tuple of (Model, Alphabet).
     """
-    return load_model_and_alphabet_hub("esm2_t33_650M_UR50D")
+    return load_model_and_alphabet_hub("esm2_t33_650M_UR50D",**kwargs)
 
 
-def esm2_t36_3B_UR50D():
+def esm2_t36_3B_UR50D(**kwargs):
     """36 layer ESM-2 model with 3B params, trained on UniRef50.
 
     Returns a tuple of (Model, Alphabet).
     """
-    return load_model_and_alphabet_hub("esm2_t36_3B_UR50D")
+    return load_model_and_alphabet_hub("esm2_t36_3B_UR50D",**kwargs)
 
 
-def esm2_t48_15B_UR50D():
+def esm2_t48_15B_UR50D(**kwargs):
     """48 layer ESM-2 model with 15B params, trained on UniRef50.
     If you have OOM while loading this model, please refer to README
     on how to employ FSDP and ZeRO CPU offloading
 
     Returns a tuple of (Model, Alphabet).
     """
-    return load_model_and_alphabet_hub("esm2_t48_15B_UR50D")
+    return load_model_and_alphabet_hub("esm2_t48_15B_UR50D",**kwargs)
 
 
 def esmfold_v0():

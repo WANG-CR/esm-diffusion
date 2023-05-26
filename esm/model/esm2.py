@@ -19,7 +19,8 @@ class ESM2(nn.Module):
         attention_heads: int = 20,
         alphabet: Union[esm.data.Alphabet, str] = "ESM-1b",
         token_dropout: bool = True,
-        max_time_steps = 1000,
+        denoise = False,
+        max_time_steps = None,
     ):
         super().__init__()
         self.num_layers = num_layers
@@ -37,6 +38,7 @@ class ESM2(nn.Module):
         self.append_eos = alphabet.append_eos
         self.token_dropout = token_dropout
         self.max_time_steps = max_time_steps
+        self.denoise = denoise
         self._init_submodules()
 
     def _init_submodules(self):
@@ -82,12 +84,21 @@ class ESM2(nn.Module):
                 self.embed_dim,
             )
 
-    def forward(self, tokens, repr_layers=[], t=None, need_head_weights=False, return_contacts=False):
+    def forward(self, tokens, repr_layers=[], padding_mask = None, t=None, need_head_weights=False, return_contacts=False):
         if return_contacts:
             need_head_weights = True
 
-        assert tokens.ndim == 2
-        padding_mask = tokens.eq(self.padding_idx)  # B, T
+        if not self.denoise:
+            # assert tokens.ndim == 2
+            if tokens.ndim ==1:
+                tokens = tokens.unsqueeze(-1)
+                print(f"tokens: {tokens.shape}")
+            assert padding_mask == None
+            padding_mask = tokens.eq(self.padding_idx)  # B, T
+        else:
+            assert tokens.ndim == 3
+            assert padding_mask is not None and padding_mask.ndim == 2
+            # padding mask is [B, L]
 
         x = self.embed_scale * self.embed_tokens(tokens)
 
@@ -158,3 +169,8 @@ class ESM2(nn.Module):
 
     def predict_contacts(self, tokens):
         return self(tokens, return_contacts=True)["contacts"]
+
+
+
+# if __name__ == '__main__':
+#     model = ESM2(num_layers=2, embed_dim=2560, attention_heads=4, alphabet="protein")
